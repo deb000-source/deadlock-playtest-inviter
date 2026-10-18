@@ -1,0 +1,44 @@
+name: Bug report / Ошибка
+description: Report a reproducible problem. English or Russian is fine.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Do not attach passwords, tokens, Steam Guard codes, session files or active QR images. Use the private security reporting link for vulnerabilities."
+  - type: input
+    id: version
+    attributes:
+      label: Program version / Версия
+      description: Run the executable with --version.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system / ОС
+      placeholder: Windows 11, x64
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Login method / Способ входа
+      options:
+        - QR
+        - Credentials
+        - Cached session
+        - Not related to login
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps and result / Действия и результат
+      description: Describe what you did, what happened and what you expected. Replace account names and Steam IDs with placeholders.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message / Текст ошибки
+      description: Include only sanitized output. Never attach .env, session.dpapi or QR images.
