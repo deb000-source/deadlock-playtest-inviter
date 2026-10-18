@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — planned v0.2.0
+## [0.2.0] - 2026-10-18
 
 ### Features
 
@@ -20,4 +20,4 @@
 - Require Go 1.27.2 or newer for the standard library security fixes.
 - Use pinned GitHub Actions, read-only build permissions and a separate release job.
 
-This is a draft for the first public release. No release date has been assigned.
+First public release.
