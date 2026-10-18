@@ -1,0 +1,113 @@
+name: test-and-build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  test:
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: Verify dependencies
+        shell: bash
+        run: |
+          go mod download
+          go mod verify
+          git diff --exit-code -- go.mod go.sum
+      - name: Format check
+        shell: bash
+        run: |
+          if [ -n "$(gofmt -l *.go)" ]; then
+            gofmt -l *.go
+            exit 1
+          fi
+      - name: Tests
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Check known vulnerabilities
+        if: runner.os == 'Windows'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  build-windows:
+    timeout-minutes: 10
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: Build Windows amd64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $env:GOOS="windows"
+          $env:GOARCH="amd64"
+          go build -trimpath -ldflags="-s -w" -o dist/deadlock-inviter-windows-amd64.exe .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare release files
+        shell: pwsh
+        run: |
+          ./scripts/collect-licenses.ps1
+          Copy-Item -LiteralPath LICENSE -Destination dist/LICENSE.txt
+          Copy-Item -LiteralPath .github/RELEASE_TEMPLATE.md -Destination dist/RELEASE_NOTES.md
+          $hash = (Get-FileHash -LiteralPath dist/deadlock-inviter-windows-amd64.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText((Join-Path $PWD dist/SHA256SUMS.txt), "$hash  deadlock-inviter-windows-amd64.exe`n", [System.Text.UTF8Encoding]::new($false))
+      - name: Upload build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: deadlock-inviter-windows-amd64
+          path: |
+            dist/deadlock-inviter-windows-amd64.exe
+            dist/SHA256SUMS.txt
+            dist/LICENSE.txt
+            dist/THIRD_PARTY_LICENSES.txt
+            dist/RELEASE_NOTES.md
+          if-no-files-found: error
+
+  release:
+    timeout-minutes: 10
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: deadlock-inviter-windows-amd64
+          path: dist
+      - name: Publish release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
+          body_path: dist/RELEASE_NOTES.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/deadlock-inviter-windows-amd64.exe
+            dist/SHA256SUMS.txt
+            dist/LICENSE.txt
+            dist/THIRD_PARTY_LICENSES.txt
